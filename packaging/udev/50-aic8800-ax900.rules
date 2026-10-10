@@ -1,0 +1,58 @@
+# aicsemi AIC8800D80 USB dongle — udev rules for aic8800-ax900
+#
+# Boot sequence this file exists to make reliable:
+#
+#   1111:1111  USB mass storage (driverless "driver disk" CD-ROM)
+#        |  usb_modeswitch, two SCSI CBWs ending F3/F2
+#        v
+#   a69c:8d80  factory/download mode, 2 bulk endpoints, no driver
+#        |  aic_load_fw binds, pushes lmacfw_rf + fmacfw + fw_patch
+#        v
+#   a69c:8d81  operational fullmac mode, 3 interfaces:
+#                1.0 / 1.1  class 0xe0/01/01  -> btusb
+#                1.2        class 0xff       -> aic8800_fdrv (Wi-Fi)
+#
+# The device reboots itself between 8d80 and 8d81, so every rule below is
+# matched per-enumeration, not once.
+
+# ---------------------------------------------------------------------------
+# 1. Leave the driverless CD-ROM and become a Wi-Fi dongle.
+#    Mirrors upstream usb_modeswitch/1111_1111; both paths are kept so the
+#    dongle works whether usb_modeswitch is installed under /usr/bin or
+#    /usr/sbin.
+# ---------------------------------------------------------------------------
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1111", ATTR{idProduct}=="1111", \
+  RUN+="/bin/sh -c 'if [ -x /usr/sbin/usb_modeswitch ]; then exec /usr/sbin/usb_modeswitch -c /etc/usb_modeswitch.d/1111:1111; elif [ -x /usr/bin/usb_modeswitch ]; then exec /usr/bin/usb_modeswitch -c /etc/usb_modeswitch.d/1111:1111; fi'"
+
+# The UGREEN-branded variant of this dongle ships a real CD-ROM instead of a
+# raw mass-storage device. Ejecting it is what triggers the switch to Wi-Fi.
+ACTION=="add", SUBSYSTEM=="block", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="5724", \
+  RUN+="/bin/sh -c '/usr/bin/eject -n %k >/dev/null 2>&1 || true'"
+ACTION=="add", SUBSYSTEM=="block", ATTRS{idVendor}=="a69c", ATTRS{idProduct}=="5721", \
+  RUN+="/bin/sh -c '/usr/bin/eject -n %k >/dev/null 2>&1 || true'"
+
+# ---------------------------------------------------------------------------
+# 2. avoid_reset_quirk.
+#
+# These chips reliably wedge if the USB core performs a port reset while the
+# driver is holding the device — the dongle stops enumerating and only comes
+# back after an unplug. Setting this on the "add" action applies it before any
+# interface driver can claim the device, which is strictly earlier and safer
+# than the usbcore.quirks= boot parameter (that one only covers devices
+# present at boot). Both apply together for a device that is present at boot
+# and replugged later; see modprobe.d/aic8800-ax900.conf.
+# ---------------------------------------------------------------------------
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="a69c", ATTR{idProduct}=="8d80", ATTR{avoid_reset_quirk}="1"
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="a69c", ATTR{idProduct}=="8d81", ATTR{avoid_reset_quirk}="1"
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="368b", ATTR{idProduct}=="8d85", ATTR{avoid_reset_quirk}="1"
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="368b", ATTR{idProduct}=="8d83", ATTR{avoid_reset_quirk}="1"
+
+# ---------------------------------------------------------------------------
+# 3. rfkill.
+#
+# The wiphy registers its own rfkill node when aic8800_fdrv probes, and its
+# initial state depends on whether a soft-block was already latched for a
+# previous instance of phy0. Unblock when the netdev appears, which is later
+# than probe and therefore always after the node exists.
+# ---------------------------------------------------------------------------
+ACTION=="add", SUBSYSTEM=="net", KERNEL=="wl*", RUN+="/usr/sbin/rfkill unblock wifi"

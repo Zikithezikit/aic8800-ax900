@@ -1,0 +1,24 @@
+# Out-of-tree build artefacts
+build/
+
+# Kernel build artefacts (these land next to the sources because kbuild with
+# M= writes in-tree; `make build` copies the finished modules to build/$(KVER)
+# and `make clean` removes them).
+*.o
+*.ko
+*.mod
+*.mod.c
+*.mod.o
+*.symvers
+*.order
+.*.cmd
+.tmp_versions/
+modules.order
+Module.symvers
+modpost.c
+
+# Editor / tooling noise
+*.swp
+*~
+.cache/
+compile_commands.json

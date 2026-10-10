@@ -1,0 +1,13 @@
+/.gitattributes text eol=lf
+/README.md text eol=lf
+/kernel/aic8800/aic_zlp_quirk/*.c text eol=lf
+/kernel/aic8800/aic_zlp_quirk/Makefile text eol=lf
+/packaging/scripts/*.sh text eol=lf
+/packaging/dkms.conf text eol=lf
+/packaging/udev/*.rules text eol=lf
+/packaging/modprobe.d/*.conf text eol=lf
+/packaging/modules-load.d/*.conf text eol=lf
+/tests/*/*.sh text eol=lf
+
+# Firmware blobs are binary. Never let git attempt a text conversion on them.
+*.bin binary
